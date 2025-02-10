@@ -1,17 +1,20 @@
----
 title: "Spotify Listening Analysis"
 author: "Ryan Carroll"
+subtitle: "https://github.com/rcarroll9389" 
 date: "`r Sys.Date()`"
-output: 
- html_document:
-   theme: flatly
-   runtime: shiny
+output:
+  html_document:
+    theme: flatly
+    runtime: shiny
+resource_files:
+- IMG_7628.jpeg
 ---
 
 ```{r include = FALSE, warning = FALSE}
 #Load Libraries -----------
 library(tidyverse)
 library(jsonlite)
+library(data.table)
 library(lubridate)
 library(ggplot2)
 library(shiny)
@@ -27,8 +30,8 @@ library(shinydashboard)
 # #Bringing in 20 separate json files with information on my streaming history
 # spotifiles <- files %>%
 #   map_df(~fromJSON(file.path(drive, .), flatten = TRUE))
-# 
-# write.csv(spotifiles, "/Users/ryancarroll/Desktop/Spotify Data/spotifiles.csv") 
+# # 
+ #write_csv(spotifiles, "/Users/ryancarroll/Desktop/Spotify Data/spotifiles.csv") 
 
 spotifiles <- read_csv("spotifiles.csv")
 ```
@@ -37,19 +40,18 @@ spotifiles <- read_csv("spotifiles.csv")
 
 # I have listened to a lot of music over the years. I am regularly in the top 95% or more of all listeners worldwide!
 
-# In 2024, I was in the top 1% of all listeners in the world, listening to roughly 96,000 minutes of music!
+# According to the latest Spotify Wrapped, I was in the top 1% of all listeners in the world, listening to roughly 96,000 minutes of music!
 
-# Image from my Spotify End of Year Wrapped. I'd say maybe I need a hobby, but I always have music playing in the background of everything I do. Whether I'm working out, skiing, biking, coding, or just hanging out. I always have something playing! I want to explore my Spotify data, and see what insights I can find from the past 10 years of data. The insights from Spotify Wrapped are great, but I want to expand them a little more, and create an interactive dashboard so I can see who exactly I spend my time listening to.
-
+# I'd say maybe I need a hobby, but I always have music playing in the background of everything I do. Whether I'm working out, skiing, biking, coding, or just hanging out. I always have something playing! I want to explore my Spotify data, and see what insights I can find from the past 10 years of data. The insights from Spotify Wrapped are great, but I want to expand them a little more, and create an interactive dashboard so I can see who exactly I spend my time listening to.
 
 # Let's first explore the data set to see what features our data set holds.
+
 ```{r echo = FALSE}
 #Glimpse one of the datasets to understand the data in each element 
   glimpse(spotifiles)
 ```
 
 ```{r include = FALSE}
-
 #I am only worried about music files, so am going to remove all podcast and audiobooks I have listened too. 
 
 spotifiles_clean <- spotifiles %>% 
@@ -66,7 +68,8 @@ spotifiles_clean2 <- spotifiles_clean %>%
   unite("month_year", month, year, sep = "-", remove = FALSE) %>%
   #convert miliseconds to seconds
   mutate(seconds_played = (ms_played * 0.001), 
-         minutes_played = round(seconds_played / 60, 2))
+         minutes_played = round(seconds_played / 60, 2)) %>%
+  filter(!is.na(date))
 
 
 # I want to see how many minutes I have listened to music on Spotify
@@ -106,7 +109,7 @@ ggplot(time_listened, aes(x = year, y = minutes_per_year, group = 1)) +
 # Is 2014 low because I didn't listen as often or is something else going on?
 low_years <- time_listened %>%
   filter(year == 2014) %>%
-  group_by(month) %>%
+  group_by(month) %>% 
   distinct(month, year)
 
 table(low_years)
@@ -167,154 +170,12 @@ artist_song_counts <- time_listened_cleaned_years %>%
 
 ```
 
-```{r echo = FALSE}
-
-ui <- dashboardPage(
-  skin = "green",
-  dashboardHeader(title = "Spotify Analysis"),
-  dashboardSidebar(
-    selectInput("year", "Select Year", choices = 2015:2024, selected = 2024), 
-    selectInput("indicator", "Select Indicator", choices = c("Top Artists", "Top Songs"), selected = "Top Artists")
-  ),
-  dashboardBody(
-    fluidRow(
-      valueBoxOutput("unique_artists"), 
-      valueBoxOutput("unique_songs"), 
-      valueBoxOutput("minutes_listened")
-    ),
-      fluidRow(
-      plotOutput("spot_bar")
-      )
-  )
-)
+# Please follow this link to view two interactive dashboards!
+# https://rcarroll9389.shinyapps.io/Spotify_Analysis_Dashboards/
 
 
-server <- function(input, output) {
-  
-  filtered_data <- reactive({
-    artist_song_counts %>%
-      filter(year == input$year)
-  })
-
- output$unique_artists <- renderValueBox({
-    song_value <- filtered_data() %>%
-      filter(kpi == "master_metadata_album_artist_name") %>%
-      pull(value)
-    valueBox(value = song_value, subtitle = "Unique Artists Count", color = "green")
-  })
-  
-  output$unique_songs <- renderValueBox({
-    artist_value <- filtered_data() %>%
-      filter(kpi == "master_metadata_track_name") %>%
-      pull(value)
-    valueBox(value = artist_value, subtitle = "Unique Songs Count", color = "green")
-  })
-  
-   output$minutes_listened <- renderValueBox({
-    minute_value <- filtered_data() %>%
-      filter(kpi == "master_metadata_album_artist_name") %>%
-      pull(minutes_per_year)
-    valueBox(value = minute_value, subtitle = "Total Minutes Listened", color = "green")
-  })
- # Reactive expression to filter bar chart data based on selected year
-  filtered_bar_data <- reactive({
-    top_artist_song %>%
-      filter(year == input$year & indicator == input$indicator)
-  })
-  
-  # Render Bar Chart
-  output$spot_bar <- renderPlot({
-    ggplot(filtered_bar_data(), aes(reorder(top_artist_song, top_value))) +
-      geom_bar(aes(weight = top_value)) + 
-      coord_flip() +
-      ggtitle("Top Songs by Year") +
-      xlab(input$indicator) +
-      ylab("Number of Times Listened") +
-      theme_bw(base_size = 16)
-  })
-}
-
-
-# create Shiny app
-shinyApp(ui, server)
-
-```
-
-Note: Spotify Wrapped is released in mid December every year. The total number of minutes listened to from the screenshot earlier in this program shows I listened to 95,897 minutes of music and does not include all of Decembers listening minutes. That is why 2024 total minutes listened to does not exactly line up with the Spotify Wrapped screenshot.
-
-```{r echo = FALSE, warning = FALSE}
-
-table_cleaned_songs <- time_listened_cleaned_years %>%
-  filter(skipped == "FALSE") %>%
-  select(year, master_metadata_track_name, master_metadata_album_artist_name, master_metadata_album_album_name, minutes_played, date, minutes_played) %>%
-  group_by(year, master_metadata_track_name, master_metadata_album_artist_name) %>% 
-  mutate(times_listened_total = n(), 
-         last_time_listened = max(date), 
-         total_minutes_played = round(sum(minutes_played))) %>%
-  select("Song Title" = master_metadata_track_name, "Artist Name" = master_metadata_album_artist_name, "Album Name" = master_metadata_album_artist_name, "Total Minutes Played" = total_minutes_played, "Last Time Played" = last_time_listened, "Total Times Played" = times_listened_total, year) %>%
-  unique() %>%
-  arrange(desc(`Total Times Played`)) %>%
-  group_by(year) %>%
-  slice_max(`Total Times Played`, n = 100) 
-  
-
-# UI definition
-ui <- fluidPage(
-  # Title of the app
-  titlePanel("Top 100 Songs by Year - Interactive Table"),
-  
-  # Sidebar layout with a search bar and filters
-  sidebarLayout(
-    sidebarPanel(
-      # selectInput("Artist Name", "Filter by Artist:",
-      #             choices = c("All", unique(table_cleaned_songs$`Artist Name`)),
-      #             selected = "All"), 
-      selectInput("year", "Filter by Year:",
-                  choices = c("All", unique(table_cleaned_songs$year)),
-                  selected = "2024")
-    ),
-    
-    # Main panel for displaying the table
-    mainPanel(
-      DTOutput("song_table")
-    )
-  )
-)
-
-# Server logic
-server <- function(input, output) {
-  
-  # Reactive expression to filter the data based on the selected department
-  # filtered_data <- reactive({
-  #   if (input$`Artist Name` == "All") {
-  #     return(table_cleaned_songs)
-  #   } else {
-  #     return(subset(table_cleaned_songs, `Artist Name` == input$`Artist Name`))
-  #   }
-  # })
-    filtered_data <- reactive({
-    if (input$year == "All") {
-      return(table_cleaned_songs)
-    } else {
-      return(subset(table_cleaned_songs, year == input$year))
-    }
-  })
-  # Render the DT table with search and filter functionality
-  output$song_table <- renderDT({
-    datatable(
-      filtered_data(),    # Data to display
-      options = list(
-        pageLength = 25,   # Number of rows to show per page
-        dom = 'lfrtip'    # This enables search and filtering
-      )
-    )
-  })
-}
-
-# Run the application
-shinyApp(ui = ui, server = server)
-```
 
 Thank you for checking out my dashboard! I am always looking for new data and artists to listen to so please send me suggestions at [rcarroll9389\@gmail.com](mailto:rcarroll9389@gmail.com){.email}
 
 This will be an evolving analysis, and I will continue to add to explore the data further. The code behind this dashboard can be found on my Github at: <https://github.com/rcarroll9389>
+
